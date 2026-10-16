@@ -1,0 +1,12 @@
+# Versions as pinned in the environment this project was developed in
+# (requirements-freeze.txt is the full `pip freeze` of that machine).
+# third_party/s3rec/requirements.txt holds the baseline's own, older pins.
+
+numpy==1.26.4
+pandas==2.2.3
+scipy==1.13.1              # third_party/s3rec: sparse rating matrices
+scikit-learn==1.6.1        # notebooks: label encoding, scaling, splits
+matplotlib==3.10.0         # src/utils/plot.py
+tqdm==4.67.1
+torch==2.5.1
+deepctr-torch==0.2.9       # src/deepfm/model.py subclasses its BaseModel/FM/DNN

@@ -1,7 +1,20 @@
+# IDE / OS
+/.idea/
+.vscode/
+*Zone.Identifier
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# raw data that is not redistributed (see README "Data")
+/data/attributes/
+/data/train_val_test2.pkl
+/results/view_log_df.parquet
+
+# scratch folders of the original project
 /Waste/
 /Reference/
-/File/view_log_df.parquet
 /BSArec/
 /BGCN-master/
-/Database/attributes/
-/Database/train_val_test2.pkl

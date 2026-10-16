@@ -1,9 +1,9 @@
 import pickle
 import warnings
-from Module.deepFM import *
-from Module.dataset import *
-from Module.trainer import *
-from utils.parser import config
+from src.deepfm.model import DeepFM
+from src.deepfm.dataset import get_dataloader
+from src.deepfm.trainer import Trainer
+from src.utils.parser import config
 from deepctr_torch.inputs import SparseFeat, DenseFeat
 
 warnings.filterwarnings("ignore")
@@ -47,7 +47,7 @@ def import_model(sparse_features, dense_features, vocab_sizes):
     model = DeepFM(linear_feature_columns=linear_feature_columns,
                    dnn_feature_columns=dnn_feature_columns, device='cuda:0')
 
-    # model.load_state_dict(torch.load('Weight/DeepFM_moive.pth'))
+    # model.load_state_dict(torch.load('weights/DeepFM_movie.pth'))
 
     return model
 
@@ -67,11 +67,11 @@ def main():
     vocab_sizes = {'userId': 230000, 'movieId': 23000}
     '''', 'genres': 20, release_date': 13100, 'popularity': 29000,
                    'runtime': 350, 'revenue': 6600'''
-    file_path = "Database/train_val_test2.pkl"
+    file_path = "data/train_val_test2.pkl"
 
     config['model'] = import_model(sparse_features, dense_features, vocab_sizes)
     x_train, x_val, x_test, y_train, y_val, y_test = load_data(file_path)
-    dataloaders = get_dataloder(config, x_train, x_val, x_test, y_train, y_val, y_test)
+    dataloaders = get_dataloader(config, x_train, x_val, x_test, y_train, y_val, y_test)
     trainer = Trainer(config, dataloaders)
     trainer.train()
     trainer.evaluate()

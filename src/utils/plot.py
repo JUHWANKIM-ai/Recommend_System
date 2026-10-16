@@ -13,4 +13,4 @@ def plot_hist(epochs, hist_numpy, title):
     plt.ylabel(f"{title}")
     plt.legend(loc="upper right")
     plt.tight_layout()
-    plt.savefig(f"File/images/{title}_plot.png", bbox_inches='tight')
+    plt.savefig(f"results/figures/{title}_plot.png", bbox_inches='tight')

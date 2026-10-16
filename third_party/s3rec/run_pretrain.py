@@ -3,16 +3,16 @@ import os
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler
 
-from datasets import SASRecDataset
+from datasets import PretrainDataset
 from models import S3RecModel
-from trainers import FinetuneTrainer
+from trainers import PretrainTrainer
 from utils import (
     EarlyStopping,
     check_path,
     get_item2attribute_json,
-    get_user_seqs,
+    get_user_seqs_long,
     set_seed,
 )
 
@@ -20,12 +20,13 @@ from utils import (
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--data_dir", default="../Database/", type=str)
+    parser.add_argument("--data_dir", default="../../data/", type=str)
     parser.add_argument("--output_dir", default="output/", type=str)
     parser.add_argument("--data_name", default="Ml", type=str)
 
     # model args
-    parser.add_argument("--model_name", default="Finetune_full", type=str)
+    parser.add_argument("--model_name", default="Pretrain", type=str)
+
     parser.add_argument(
         "--hidden_size", type=int, default=64, help="hidden size of transformer model"
     )
@@ -56,6 +57,18 @@ def main():
     parser.add_argument("--log_freq", type=int, default=1, help="per epoch print res")
     parser.add_argument("--seed", default=42, type=int)
 
+    # pre train args
+    parser.add_argument(
+        "--pre_epochs", type=int, default=300, help="number of pre_train epochs"
+    )
+    parser.add_argument("--pre_batch_size", type=int, default=512)
+
+    parser.add_argument("--mask_p", type=float, default=0.2, help="mask probability")
+    parser.add_argument("--aap_weight", type=float, default=0.2, help="aap loss weight")
+    parser.add_argument("--mip_weight", type=float, default=1.0, help="mip loss weight")
+    parser.add_argument("--map_weight", type=float, default=1.0, help="map loss weight")
+    parser.add_argument("--sp_weight", type=float, default=0.5, help="sp loss weight")
+
     parser.add_argument(
         "--weight_decay", type=float, default=0.0, help="weight_decay of adam"
     )
@@ -67,23 +80,22 @@ def main():
     )
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
 
-    parser.add_argument("--using_pretrain", default=True, action="store_true")
-
     args = parser.parse_args()
 
     set_seed(args.seed)
     check_path(args.output_dir)
 
+    args.checkpoint_path = os.path.join(args.output_dir, "Pretrain.pt")
+
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
     args.cuda_condition = torch.cuda.is_available() and not args.no_cuda
 
+    # args.data_file = args.data_dir + args.data_name + '.txt'
     args.data_file = args.data_dir + "train_items.csv"
     item2attribute_file = args.data_dir + args.data_name + "_item2att.json"
+    # concat all user_seq get a long sequence, from which sample neg segment for SP
 
-    user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
-        args.data_file
-    )
-    user_seq = [sublst for sublst in user_seq if len(sublst) != 1]
+    user_seq, max_item, long_sequence = get_user_seqs_long(args.data_file)
 
     item2attribute, attribute_size = get_item2attribute_json(item2attribute_file)
 
@@ -91,72 +103,28 @@ def main():
     args.mask_id = max_item + 1
     args.attribute_size = int(attribute_size) + 1
 
-    # save model args
-    args_str = f"{args.model_name}-{args.data_name}"
-    args.log_file = os.path.join(args.output_dir, args_str + ".txt")
-    print(str(args))
-
     args.item2attribute = item2attribute
-    # set item score in train set to `0` in validation
-    args.train_matrix = valid_rating_matrix
-
-    # save model
-    checkpoint = args_str + ".pt"
-    args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
-
-    train_dataset = SASRecDataset(args, user_seq, data_type="train")
-    train_sampler = RandomSampler(train_dataset)
-    train_dataloader = DataLoader(
-        train_dataset, sampler=train_sampler, batch_size=args.batch_size
-    )
-
-    eval_dataset = SASRecDataset(args, user_seq, data_type="valid")
-    eval_sampler = SequentialSampler(eval_dataset)
-    eval_dataloader = DataLoader(
-        eval_dataset, sampler=eval_sampler, batch_size=args.batch_size
-    )
-
-    test_dataset = SASRecDataset(args, user_seq, data_type="test")
-    test_sampler = SequentialSampler(test_dataset)
-    test_dataloader = DataLoader(
-        test_dataset, sampler=test_sampler, batch_size=args.batch_size
-    )
 
     model = S3RecModel(args=args)
-
-    trainer = FinetuneTrainer(
-        model, train_dataloader, eval_dataloader, test_dataloader, None, args
-    )
-
-    print(args.using_pretrain)
-    if args.using_pretrain:
-        pretrained_path = os.path.join(args.output_dir, "Pretrain.pt")
-        try:
-            trainer.load(pretrained_path)
-            print(f"Load Checkpoint From {pretrained_path}!")
-
-        except FileNotFoundError:
-            print(f"{pretrained_path} Not Found! The Model is same as SASRec")
-    else:
-        print("Not using pretrained model. The Model is same as SASRec")
+    trainer = PretrainTrainer(model, None, None, None, None, args)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
-    for epoch in range(args.epochs):
-        trainer.train(epoch)
 
-        scores, _ = trainer.valid(epoch)
+    for epoch in range(args.pre_epochs):
 
-        early_stopping(np.array(scores[-1:]), trainer.model)
+        pretrain_dataset = PretrainDataset(args, user_seq, long_sequence)
+        pretrain_sampler = RandomSampler(pretrain_dataset)
+        pretrain_dataloader = DataLoader(
+            pretrain_dataset, sampler=pretrain_sampler, batch_size=args.pre_batch_size
+        )
+
+        losses = trainer.pretrain(epoch, pretrain_dataloader)
+
+        ## comparing `sp_loss_avg``
+        early_stopping(np.array([-losses["sp_loss_avg"]]), trainer.model)
         if early_stopping.early_stop:
             print("Early stopping")
             break
-
-    trainer.args.train_matrix = test_rating_matrix
-    print("---------------Change to test_rating_matrix!-------------------")
-    # load the best model
-    trainer.model.load_state_dict(torch.load(args.checkpoint_path))
-    scores, result_info = trainer.test(0)
-    print(result_info)
 
 
 if __name__ == "__main__":

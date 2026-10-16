@@ -1,8 +1,9 @@
 import sys
 import time
+import torch
 import pandas as pd
-from utils.plot import *
-from utils.metrics import *
+from src.utils.plot import *
+from src.utils.metrics import *
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
@@ -19,8 +20,8 @@ class Trainer:
         self.patience = self.config['train'].patience
         self.batch_size = self.config['train'].batch_size
 
-        self.weight_path = f'Weight/DeepFM_moive.pth'
-        self.saving_path = f'File/DeepFM_movie.csv'
+        self.weight_path = f'weights/DeepFM_movie.pth'
+        self.saving_path = f'results/DeepFM_movie.csv'
 
     def plot_bar(self, mode, i, len_data):
         progress = i / len_data

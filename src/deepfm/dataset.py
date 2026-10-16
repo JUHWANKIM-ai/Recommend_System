@@ -16,7 +16,7 @@ class TrainDataset(Dataset):
         return self.x_train[index], self.y_train[index]
 
 
-def get_dataloder(config, x_train, x_val, x_test, y_train, y_val, y_test):
+def get_dataloader(config, x_train, x_val, x_test, y_train, y_val, y_test):
     print('\nGetting dataloader...')
     train_dataset = TrainDataset(x_train, y_train)
     val_dataset = TrainDataset(x_val, y_val)
